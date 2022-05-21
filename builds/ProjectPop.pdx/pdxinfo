@@ -1,0 +1,9 @@
+name=BubbleWrap+
+author=Sam Feng
+description=The Wonderful Portable Bubblewrap
+bundleID=com.unsame.bubblewrap
+version=0.9
+imagePath=sprites/card.png
+launchSoundPath=sounds/pop.wav
+pdxversion=11000
+buildtime=706486775
