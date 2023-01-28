@@ -2,12 +2,14 @@ import "CoreLibs/graphics"
 import "CoreLibs/sprites"
 import "CoreLibs/animator"
 import "CoreLibs/easing"
+import "CoreLibs/timer"
 
 local gfx <const> = playdate.graphics
 
 local bubbleNormal = gfx.image.new("sprites/bubble_normal.png")
 local bubbleBroken1 = gfx.image.new("sprites/bubble_broke_1.png")
 local bubbleBroken2 = gfx.image.new("sprites/bubble_broke_2.png")
+local popped = gfx.image.new("sprites/popped.png")
 
 local bubbles = {}
 local bubblesPopped = {}
@@ -16,45 +18,85 @@ local popAnimationList = {}
 local popSFX = playdate.sound.sampleplayer.new("sounds/pop.wav")
 local resetSFX = playdate.sound.sampleplayer.new("sounds/reset.wav")
 
+local backgroundImage
+local backgroundEnabled = true
+
+-- Clamps a number to within a certain range, with optional rounding
+function math.clamp(low, n, high) return math.min(math.max(n, low), high) end
+
+function spawnBubble(x, y)
+    print("spawn bubble " .. x .. ", " .. y)
+
+    local bubble = gfx.sprite.new(bubbleNormal)
+            
+    bubble:moveTo(x * 32 + math.random(-1, 1), y * 32 - 8 + math.random(-1, 1))
+
+    -- if odd row, shift x position
+    if y % 2 == 1 then
+        bubble:moveBy(-16, 0)
+    end
+
+    bubble:setZIndex(10)
+    bubble:add()
+    --bubbles[ ((x - 1) * 7) + (y - 1) + 1 ] = bubble
+    table.insert(bubbles, bubble)
+
+    -- play a sound
+    local volume = math.random(5, 10) / 10
+    resetSFX:setVolume((1 - (bubble.x / 400)) * volume, bubble.x / 400 * volume)
+    resetSFX:setRate(math.random(8, 11) / 10)
+    resetSFX:play()
+end
+
 function initialize()
     -- set drawmode
     --gfx.setImageDrawMode(gfx.kDrawModeWhiteTransparent)
 
+    -- add background
+    backgroundImage = gfx.image.new( "sprites/bg" )
+    assert( backgroundImage )
+
+    gfx.sprite.setBackgroundDrawingCallback(
+        function( x, y, width, height )
+            if backgroundEnabled then
+                backgroundImage:draw( 0, 0 )
+            else
+                backgroundImage:draw( 500, 500 )
+            end
+        end
+    )
+
+    -- add menu option for background
+    local menu = playdate.getSystemMenu()
+    local checkmarkMenuItem, error = menu:addCheckmarkMenuItem("Background", true, function(value)
+        print("background value: " .. tostring(value))
+        backgroundEnabled = value
+        gfx.sprite.redrawBackground()
+    end)
+
+    local menu = playdate.getSystemMenu()
+    local checkmarkMenuItem, error = menu:addCheckmarkMenuItem("Dark mode", false, function(value)
+        playdate.display.setInverted(value)
+    end)
+
     -- spawn a bunch of bubbles
     for x = 1, 12, 1 do
         for y = 1, 7, 1 do
-            local bubble = gfx.sprite.new(bubbleNormal)
-            
-            bubble:moveTo(x * 32 + math.random(-1, 1), y * 32 - 8 + math.random(-1, 1))
-
-            -- if odd row, shift x position
-            if y % 2 == 1 then
-                bubble:moveBy(-16, 0)
-            end
-
-            bubble:add()
-            --bubbles[ ((x - 1) * 7) + (y - 1) + 1 ] = bubble
-            table.insert(bubbles, bubble)
+            -- spawn bubbles one by one
+            playdate.timer.performAfterDelay(10 * ((x - 1) * 7) + (y - 1) + 1, function() spawnBubble(x, y) end)
         end
     end
 
     -- invert display
     -- playdate.display.setInverted(true)
 
-    -- add background
-    local backgroundImage = gfx.image.new( "sprites/bg" )
-    assert( backgroundImage )
-
-    gfx.sprite.setBackgroundDrawingCallback(
-        function( x, y, width, height )
-            backgroundImage:draw( 0, 0 )
-        end
-    )
 end
 
 initialize()
 
 function playdate:update()
+    playdate.timer.updateTimers()
+
     gfx.sprite.update()
 
     -- update animations
@@ -112,6 +154,14 @@ function popBubble()
     local anim = gfx.animator.new(200, 1.3, 1, playdate.easingFunctions.outBounce)
     anim.s = 1.9
     popAnimationList[#bubblesPopped] = anim
+
+    -- spawn a popped bubble
+    -- local poppedBubble = gfx.sprite.new(popped)
+    -- poppedBubble:setZIndex(1)
+    -- poppedBubble:setImageFlip(flipOptions[math.random(1, 3)])
+    -- poppedBubble:moveTo(bubble.x, bubble.y)
+    -- poppedBubble:add()
+
 end
 
 function resetBubble()
@@ -142,7 +192,7 @@ function playdate.cranked(change, acceleratedChange)
      
     -- move bubbles up
     -- for i, bubble in pairs(bubbles) do
-    --     bubble:moveBy(0, math.min(-change / 2, 10))
+    --     bubble:moveBy(0, math.clamp(-change / 2, -10, 0))
     -- end
 end
 
